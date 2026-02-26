@@ -14,19 +14,32 @@ type NodeAnalytics = {
   gasLevel: number;
   battery: number;
   signal: number;
+
+  cropType: string;
+  description: string;
+  storageDate: string;
+  expectedShelfLife: string;
+  optimalTemp: number;
+  optimalHumidity: number;
+  spoilageChance: number;
+  storageStatus: string;
 };
 
 type RiskLevel = "SAFE" | "WARNING" | "CRITICAL";
 
 function toNumber(value: unknown, fallback = 0) {
   if (typeof value === "number") return value;
-
   if (typeof value === "string") {
     const parsed = Number.parseFloat(value);
     if (!Number.isNaN(parsed)) return parsed;
   }
-
   return fallback;
+}
+
+function toText(value: unknown, fallback = "-") {
+  return typeof value === "string" && value.trim()
+    ? value
+    : fallback;
 }
 
 function calculateRisk(node: NodeAnalytics): RiskLevel {
@@ -61,13 +74,13 @@ export default function NodeAnalyticsPage({
 }: {
   params: { nodeId: string };
 }) {
-  const [node, setNode] = useState<NodeAnalytics | null>(null);
+  const [node, setNode] =
+    useState<NodeAnalytics | null>(null);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] =
+    useState<string | null>(null);
 
   useEffect(() => {
-    setError(null);
-
     const unsubscribe = onSnapshot(
       doc(db, "nodes", params.nodeId),
       (snapshot) => {
@@ -85,18 +98,38 @@ export default function NodeAnalyticsPage({
             typeof data.name === "string"
               ? data.name
               : `Node ${snapshot.id}`,
+
           temperature: toNumber(data.temperature),
-          humidity: toNumber(data.humidity ?? data.moisture),
+          humidity: toNumber(
+            data.humidity ?? data.moisture
+          ),
           gasLevel: toNumber(data.gasLevel),
           battery: toNumber(data.battery),
           signal: toNumber(data.signal),
+
+          cropType: toText(data.cropType),
+          description: toText(data.description),
+          storageDate: toText(data.storageDate),
+          expectedShelfLife: toText(
+            data.expectedShelfLife
+          ),
+          optimalTemp: toNumber(data.optimalTemp),
+          optimalHumidity: toNumber(
+            data.optimalHumidity
+          ),
+          spoilageChance: toNumber(
+            data.spoilageChance
+          ),
+          storageStatus: toText(
+            data.storageStatus
+          ),
         });
 
         setLoading(false);
       },
       () => {
         setError(
-          "Unable to load node analytics from Firebase Firestore."
+          "Unable to load node analytics."
         );
         setLoading(false);
       }
@@ -110,93 +143,57 @@ export default function NodeAnalyticsPage({
     [node]
   );
 
-  const recommendation = risk
-    ? recommendationForRisk(risk)
-    : null;
+  const recommendation =
+    risk && recommendationForRisk(risk);
+
+  if (loading)
+    return (
+      <SectionCard title="Loading Node">
+        Loading analytics...
+      </SectionCard>
+    );
+
+  if (error)
+    return (
+      <SectionCard title="Error">
+        {error}
+      </SectionCard>
+    );
+
+  if (!node)
+    return (
+      <SectionCard title="Node Not Found" />
+    );
 
   return (
     <main className="space-y-5">
-      <div className="flex items-center justify-between">
-        <div>
-          <p className="text-xs uppercase tracking-[0.2em] text-zinc-500">
-            Node Analytics
-          </p>
-          <h1 className="mt-2 text-2xl font-semibold text-zinc-100">
-            {node?.name ?? "Node"}
-          </h1>
-        </div>
+      <div className="flex justify-between">
+        <h1 className="text-2xl font-semibold">
+          {node.name}
+        </h1>
 
-        <Link
-          href="/nodes"
-          className="rounded-full border border-white/15 px-4 py-2 text-xs uppercase tracking-[0.12em] text-zinc-300 hover:bg-white/10"
-        >
-          Back to nodes
-        </Link>
+        <Link href="/nodes">Back</Link>
       </div>
 
-      {loading ? (
-        <SectionCard title="Loading Node">
-          <p className="text-sm text-zinc-400">
-            Loading node analytics...
-          </p>
-        </SectionCard>
-      ) : error ? (
-        <SectionCard title="Error">
-          <p className="text-sm text-zinc-400">{error}</p>
-        </SectionCard>
-      ) : !node ? (
-        <SectionCard title="Node Not Found">
-          <p className="text-sm text-zinc-400">
-            Node does not exist.
-          </p>
-        </SectionCard>
-      ) : (
-        <>
-          <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-            <Card title="Temperature" value={`${node.temperature}°C`} />
-            <Card title="Humidity" value={`${node.humidity}%`} />
-            <Card title="Gas Level" value={`${node.gasLevel} ppm`} />
-            <Card title="Battery" value={`${node.battery}%`} />
-            <Card title="Signal" value={`${node.signal}%`} />
+      {/* STORAGE METADATA */}
+      <SectionCard title="Crop Storage Metadata">
+        <p>Crop: {node.cropType}</p>
+        <p>Stored: {node.storageDate}</p>
+        <p>Status: {node.storageStatus}</p>
+        <p>{node.description}</p>
+      </SectionCard>
 
-            <article className="rounded-xl border border-white/10 bg-black/35 p-4">
-              <p className="text-sm text-zinc-500">Risk Status</p>
-              <div className="mt-2">
-                <span
-                  className={`rounded-full border px-3 py-1 text-xs font-semibold ${riskClasses(
-                    risk!
-                  )}`}
-                >
-                  {risk}
-                </span>
-              </div>
-            </article>
-          </section>
+      {/* SENSOR DATA */}
+      <SectionCard title="Live Sensors">
+        <p>Temp: {node.temperature}°C</p>
+        <p>Humidity: {node.humidity}%</p>
+        <p>Gas: {node.gasLevel} ppm</p>
+      </SectionCard>
 
-          <SectionCard
-            title="Recommendation"
-            subtitle="Storage decision engine"
-          >
-            <div className="rounded-xl border border-white/10 bg-black/30 p-4">
-              <p className="text-sm text-zinc-400">
-                Recommended Action
-              </p>
-              <p className="mt-2 text-3xl font-semibold text-zinc-100">
-                {recommendation}
-              </p>
-            </div>
-          </SectionCard>
-        </>
-      )}
+      {/* DECISION */}
+      <SectionCard title="Recommendation">
+        {recommendation}
+      </SectionCard>
     </main>
-  );
-}
-
-function Card({ title, value }: { title: string; value: string }) {
-  return (
-    <article className="rounded-xl border border-white/10 bg-black/35 p-4">
-      <p className="text-sm text-zinc-500">{title}</p>
-      <p className="mt-2 text-xl font-semibold">{value}</p>
-    </article>
   );
 }
