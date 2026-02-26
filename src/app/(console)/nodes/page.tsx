@@ -34,16 +34,11 @@ function statusClasses(status: string) {
 }
 
 function toNumber(value: number | string | undefined) {
-  if (typeof value === "number") {
-    return value;
-  }
+  if (typeof value === "number") return value;
 
   if (typeof value === "string") {
     const parsed = Number.parseFloat(value);
-
-    if (!Number.isNaN(parsed)) {
-      return parsed;
-    }
+    if (!Number.isNaN(parsed)) return parsed;
   }
 
   return 0;
@@ -58,7 +53,9 @@ export default function NodesPage() {
     async function loadNodes() {
       try {
         setError(null);
+
         const snapshot = await getDocs(collection(db, "nodes"));
+
         const nextNodes = snapshot.docs.map((docSnapshot) => {
           const data = docSnapshot.data() as FirestoreNode;
 
@@ -68,14 +65,16 @@ export default function NodesPage() {
             status: data.status ?? "Offline",
             cropType: data.cropType ?? "Unknown",
             battery: toNumber(data.battery),
-            signal: toNumber(data.signal)
+            signal: toNumber(data.signal),
           };
         });
 
         setNodes(nextNodes);
       } catch {
         setNodes([]);
-        setError("Unable to load nodes from Firebase Firestore. Check credentials and Firestore rules.");
+        setError(
+          "Unable to load nodes from Firebase Firestore. Check credentials or rules."
+        );
       } finally {
         setLoading(false);
       }
@@ -102,30 +101,43 @@ export default function NodesPage() {
             >
               <div className="flex items-start justify-between gap-3">
                 <div>
-                  <p className="text-xs uppercase tracking-[0.18em] text-zinc-500">{node.id}</p>
-                  <h3 className="mt-2 text-lg font-semibold text-zinc-100">{node.name}</h3>
+                  <p className="text-xs uppercase tracking-[0.18em] text-zinc-500">
+                    {node.id}
+                  </p>
+                  <h3 className="mt-2 text-lg font-semibold text-zinc-100">
+                    {node.name}
+                  </h3>
                 </div>
-                <span className={`rounded-full border px-2 py-1 text-xs uppercase tracking-[0.12em] ${statusClasses(node.status)}`}>
+
+                <span
+                  className={`rounded-full border px-2 py-1 text-xs uppercase tracking-[0.12em] ${statusClasses(
+                    node.status
+                  )}`}
+                >
                   {node.status}
                 </span>
               </div>
 
               <div className="mt-4 space-y-2 text-sm">
-                <p className="flex items-center justify-between text-zinc-300">
+                <p className="flex justify-between text-zinc-300">
                   <span className="text-zinc-500">Crop Type</span>
                   <span>{node.cropType}</span>
                 </p>
-                <p className="flex items-center justify-between text-zinc-300">
+
+                <p className="flex justify-between text-zinc-300">
                   <span className="text-zinc-500">Battery</span>
                   <span>{node.battery}%</span>
                 </p>
-                <p className="flex items-center justify-between text-zinc-300">
+
+                <p className="flex justify-between text-zinc-300">
                   <span className="text-zinc-500">Signal Strength</span>
                   <span>{node.signal}%</span>
                 </p>
               </div>
 
-              <p className="mt-4 text-xs uppercase tracking-[0.18em] text-cyan-300">Open analytics →</p>
+              <p className="mt-4 text-xs uppercase tracking-[0.18em] text-cyan-300">
+                Open analytics →
+              </p>
             </Link>
           ))}
         </div>
