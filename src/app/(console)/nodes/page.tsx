@@ -21,6 +21,8 @@ type FirestoreNode = Partial<NodeCard> & {
   signal?: number | string;
 };
 
+/* ================= STATUS STYLE ================= */
+
 function statusClasses(status: string) {
   if (status === "Online") {
     return "text-emerald-300 border-emerald-400/35 bg-emerald-500/10";
@@ -33,21 +35,20 @@ function statusClasses(status: string) {
   return "text-red-300 border-red-400/35 bg-red-500/10";
 }
 
+/* ================= HELPERS ================= */
+
 function toNumber(value: number | string | undefined) {
-  if (typeof value === "number") {
-    return value;
-  }
+  if (typeof value === "number") return value;
 
   if (typeof value === "string") {
     const parsed = Number.parseFloat(value);
-
-    if (!Number.isNaN(parsed)) {
-      return parsed;
-    }
+    if (!Number.isNaN(parsed)) return parsed;
   }
 
   return 0;
 }
+
+/* ================= PAGE ================= */
 
 export default function NodesPage() {
   const [nodes, setNodes] = useState<NodeCard[]>([]);
@@ -60,16 +61,16 @@ export default function NodesPage() {
     const unsubscribe = onSnapshot(
       collection(db, "nodes"),
       (snapshot) => {
-        const nextNodes = snapshot.docs.map((docSnapshot) => {
-          const data = docSnapshot.data() as FirestoreNode;
+        const nextNodes = snapshot.docs.map((doc) => {
+          const data = doc.data() as FirestoreNode;
 
           return {
-            id: data.id ?? docSnapshot.id,
+            id: data.id ?? doc.id,
             name: data.name ?? "Unnamed Node",
             status: data.status ?? "Offline",
             cropType: data.cropType ?? "Unknown",
             battery: toNumber(data.battery),
-            signal: toNumber(data.signal)
+            signal: toNumber(data.signal),
           };
         });
 
@@ -78,24 +79,33 @@ export default function NodesPage() {
       },
       () => {
         setNodes([]);
-        setError("Unable to load nodes from Firebase Firestore. Check credentials and Firestore rules.");
+        setError(
+          "Unable to load nodes from Firebase Firestore."
+        );
         setLoading(false);
       }
     );
 
-    return () => {
-      unsubscribe();
-    };
+    return () => unsubscribe();
   }, []);
 
   return (
-    <SectionCard title="Node Management" subtitle="Connected farm nodes">
+    <SectionCard
+      title="Node Management"
+      subtitle="Connected farm nodes"
+    >
       {loading ? (
-        <p className="text-sm text-zinc-400">Loading nodes...</p>
+        <p className="text-sm text-zinc-400">
+          Loading nodes...
+        </p>
       ) : error ? (
-        <p className="text-sm text-zinc-400">{error}</p>
+        <p className="text-sm text-zinc-400">
+          {error}
+        </p>
       ) : nodes.length === 0 ? (
-        <p className="text-sm text-zinc-400">No nodes found.</p>
+        <p className="text-sm text-zinc-400">
+          No nodes found.
+        </p>
       ) : (
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
           {nodes.map((node) => (
@@ -106,30 +116,50 @@ export default function NodesPage() {
             >
               <div className="flex items-start justify-between gap-3">
                 <div>
-                  <p className="text-xs uppercase tracking-[0.18em] text-zinc-500">{node.id}</p>
-                  <h3 className="mt-2 text-lg font-semibold text-zinc-100">{node.name}</h3>
+                  <p className="text-xs uppercase tracking-[0.18em] text-zinc-500">
+                    {node.id}
+                  </p>
+
+                  <h3 className="mt-2 text-lg font-semibold text-zinc-100">
+                    {node.name}
+                  </h3>
                 </div>
-                <span className={`rounded-full border px-2 py-1 text-xs uppercase tracking-[0.12em] ${statusClasses(node.status)}`}>
+
+                <span
+                  className={`rounded-full border px-2 py-1 text-xs uppercase tracking-[0.12em] ${statusClasses(
+                    node.status
+                  )}`}
+                >
                   {node.status}
                 </span>
               </div>
 
               <div className="mt-4 space-y-2 text-sm">
-                <p className="flex items-center justify-between text-zinc-300">
-                  <span className="text-zinc-500">Crop Type</span>
+                <p className="flex justify-between text-zinc-300">
+                  <span className="text-zinc-500">
+                    Crop Type
+                  </span>
                   <span>{node.cropType}</span>
                 </p>
-                <p className="flex items-center justify-between text-zinc-300">
-                  <span className="text-zinc-500">Battery</span>
+
+                <p className="flex justify-between text-zinc-300">
+                  <span className="text-zinc-500">
+                    Battery
+                  </span>
                   <span>{node.battery}%</span>
                 </p>
-                <p className="flex items-center justify-between text-zinc-300">
-                  <span className="text-zinc-500">Signal Strength</span>
+
+                <p className="flex justify-between text-zinc-300">
+                  <span className="text-zinc-500">
+                    Signal Strength
+                  </span>
                   <span>{node.signal}%</span>
                 </p>
               </div>
 
-              <p className="mt-4 text-xs uppercase tracking-[0.18em] text-cyan-300">Open analytics →</p>
+              <p className="mt-4 text-xs uppercase tracking-[0.18em] text-cyan-300">
+                Open analytics →
+              </p>
             </Link>
           ))}
         </div>
