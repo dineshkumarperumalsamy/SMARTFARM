@@ -15,10 +15,6 @@ type NodeCard = {
   signal: number;
 };
 
-type FirestoreNode = Partial<NodeCard> & {
-  id?: string;
-};
-
 function statusClasses(status: string) {
   if (status === "Online") {
     return "text-emerald-300 border-emerald-400/35 bg-emerald-500/10";
@@ -37,27 +33,23 @@ export default function NodesPage() {
 
   useEffect(() => {
     async function loadNodes() {
-      try {
-        const snapshot = await getDocs(collection(db, "nodes"));
-        const nextNodes = snapshot.docs.map((docSnapshot) => {
-          const data = docSnapshot.data() as FirestoreNode;
+      const snapshot = await getDocs(collection(db, "nodes"));
 
-          return {
-            id: data.id ?? docSnapshot.id,
-            name: data.name ?? "Unnamed Node",
-            status: data.status ?? "Offline",
-            cropType: data.cropType ?? "Unknown",
-            battery: typeof data.battery === "number" ? data.battery : 0,
-            signal: typeof data.signal === "number" ? data.signal : 0
-          };
-        });
+      const nextNodes = snapshot.docs.map((doc) => {
+        const data = doc.data();
 
-        setNodes(nextNodes);
-      } catch {
-        setNodes([]);
-      } finally {
-        setLoading(false);
-      }
+        return {
+          id: doc.id,
+          name: data.name ?? "Unnamed Node",
+          status: data.status ?? "Offline",
+          cropType: data.cropType ?? "Unknown",
+          battery: data.battery ?? 0,
+          signal: data.signal ?? 0,
+        };
+      });
+
+      setNodes(nextNodes);
+      setLoading(false);
     }
 
     loadNodes();
@@ -79,30 +71,43 @@ export default function NodesPage() {
             >
               <div className="flex items-start justify-between gap-3">
                 <div>
-                  <p className="text-xs uppercase tracking-[0.18em] text-zinc-500">{node.id}</p>
-                  <h3 className="mt-2 text-lg font-semibold text-zinc-100">{node.name}</h3>
+                  <p className="text-xs uppercase tracking-[0.18em] text-zinc-500">
+                    {node.id}
+                  </p>
+                  <h3 className="mt-2 text-lg font-semibold text-zinc-100">
+                    {node.name}
+                  </h3>
                 </div>
-                <span className={`rounded-full border px-2 py-1 text-xs uppercase tracking-[0.12em] ${statusClasses(node.status)}`}>
+
+                <span
+                  className={`rounded-full border px-2 py-1 text-xs uppercase tracking-[0.12em] ${statusClasses(
+                    node.status
+                  )}`}
+                >
                   {node.status}
                 </span>
               </div>
 
               <div className="mt-4 space-y-2 text-sm">
-                <p className="flex items-center justify-between text-zinc-300">
+                <p className="flex justify-between text-zinc-300">
                   <span className="text-zinc-500">Crop Type</span>
                   <span>{node.cropType}</span>
                 </p>
-                <p className="flex items-center justify-between text-zinc-300">
+
+                <p className="flex justify-between text-zinc-300">
                   <span className="text-zinc-500">Battery</span>
                   <span>{node.battery}%</span>
                 </p>
-                <p className="flex items-center justify-between text-zinc-300">
+
+                <p className="flex justify-between text-zinc-300">
                   <span className="text-zinc-500">Signal Strength</span>
                   <span>{node.signal}%</span>
                 </p>
               </div>
 
-              <p className="mt-4 text-xs uppercase tracking-[0.18em] text-cyan-300">Open analytics →</p>
+              <p className="mt-4 text-xs uppercase tracking-[0.18em] text-cyan-300">
+                Open analytics →
+              </p>
             </Link>
           ))}
         </div>
