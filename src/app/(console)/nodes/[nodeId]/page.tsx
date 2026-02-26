@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
-import { doc, getDoc } from "firebase/firestore";
+import { doc, onSnapshot } from "firebase/firestore";
 import { SectionCard } from "@/components/section-card";
 import { db } from "@/lib/firebase";
 
@@ -33,9 +33,8 @@ function calculateRisk(node: NodeAnalytics): RiskLevel {
   if (node.gasLevel > 150) return "CRITICAL";
 
   let score = 0;
-
-  if (node.temperature > 30) score += 1;
-  if (node.humidity > 75) score += 1;
+  if (node.temperature > 30) score++;
+  if (node.humidity > 75) score++;
 
   if (score === 0) return "SAFE";
   return "WARNING";
@@ -67,16 +66,14 @@ export default function NodeAnalyticsPage({
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    async function loadNode() {
-      try {
-        setError(null);
+    setError(null);
 
-        const snapshot = await getDoc(
-          doc(db, "nodes", params.nodeId)
-        );
-
+    const unsubscribe = onSnapshot(
+      doc(db, "nodes", params.nodeId),
+      (snapshot) => {
         if (!snapshot.exists()) {
           setNode(null);
+          setLoading(false);
           return;
         }
 
@@ -89,21 +86,23 @@ export default function NodeAnalyticsPage({
               ? data.name
               : `Node ${snapshot.id}`,
           temperature: toNumber(data.temperature),
-          humidity: toNumber(data.humidity),
+          humidity: toNumber(data.humidity ?? data.moisture),
           gasLevel: toNumber(data.gasLevel),
           battery: toNumber(data.battery),
           signal: toNumber(data.signal),
         });
-      } catch {
+
+        setLoading(false);
+      },
+      () => {
         setError(
           "Unable to load node analytics from Firebase Firestore."
         );
-      } finally {
         setLoading(false);
       }
-    }
+    );
 
-    loadNode();
+    return () => unsubscribe();
   }, [params.nodeId]);
 
   const risk = useMemo(
@@ -136,7 +135,7 @@ export default function NodeAnalyticsPage({
       </div>
 
       {loading ? (
-        <SectionCard title="Loading Node" subtitle="Fetching live data">
+        <SectionCard title="Loading Node">
           <p className="text-sm text-zinc-400">
             Loading node analytics...
           </p>
@@ -153,7 +152,6 @@ export default function NodeAnalyticsPage({
         </SectionCard>
       ) : (
         <>
-          {/* SENSOR DATA */}
           <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
             <Card title="Temperature" value={`${node.temperature}°C`} />
             <Card title="Humidity" value={`${node.humidity}%`} />
@@ -175,7 +173,6 @@ export default function NodeAnalyticsPage({
             </article>
           </section>
 
-          {/* DECISION ENGINE */}
           <SectionCard
             title="Recommendation"
             subtitle="Storage decision engine"

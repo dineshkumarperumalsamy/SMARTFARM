@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { collection, getDocs } from "firebase/firestore";
+import { collection, onSnapshot } from "firebase/firestore";
 import { SectionCard } from "@/components/section-card";
 import { db } from "@/lib/firebase";
 
@@ -22,13 +22,11 @@ type FirestoreNode = Partial<NodeCard> & {
 };
 
 function statusClasses(status: string) {
-  if (status === "Online") {
+  if (status === "Online")
     return "text-emerald-300 border-emerald-400/35 bg-emerald-500/10";
-  }
 
-  if (status === "Warning") {
+  if (status === "Warning")
     return "text-amber-300 border-amber-400/35 bg-amber-500/10";
-  }
 
   return "text-red-300 border-red-400/35 bg-red-500/10";
 }
@@ -50,12 +48,11 @@ export default function NodesPage() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    async function loadNodes() {
-      try {
-        setError(null);
+    setError(null);
 
-        const snapshot = await getDocs(collection(db, "nodes"));
-
+    const unsubscribe = onSnapshot(
+      collection(db, "nodes"),
+      (snapshot) => {
         const nextNodes = snapshot.docs.map((docSnapshot) => {
           const data = docSnapshot.data() as FirestoreNode;
 
@@ -70,27 +67,35 @@ export default function NodesPage() {
         });
 
         setNodes(nextNodes);
-      } catch {
+        setLoading(false);
+      },
+      () => {
         setNodes([]);
         setError(
-          "Unable to load nodes from Firebase Firestore. Check credentials or rules."
+          "Unable to load nodes from Firebase Firestore."
         );
-      } finally {
         setLoading(false);
       }
-    }
+    );
 
-    loadNodes();
+    return () => unsubscribe();
   }, []);
 
   return (
-    <SectionCard title="Node Management" subtitle="Connected farm nodes">
+    <SectionCard
+      title="Node Management"
+      subtitle="Connected farm nodes"
+    >
       {loading ? (
-        <p className="text-sm text-zinc-400">Loading nodes...</p>
+        <p className="text-sm text-zinc-400">
+          Loading nodes...
+        </p>
       ) : error ? (
         <p className="text-sm text-zinc-400">{error}</p>
       ) : nodes.length === 0 ? (
-        <p className="text-sm text-zinc-400">No nodes found.</p>
+        <p className="text-sm text-zinc-400">
+          No nodes found.
+        </p>
       ) : (
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
           {nodes.map((node) => (
@@ -99,7 +104,7 @@ export default function NodesPage() {
               href={`/nodes/${node.id}`}
               className="rounded-2xl border border-white/10 bg-black/35 p-4 transition hover:border-cyan-400/35 hover:bg-cyan-500/[0.08]"
             >
-              <div className="flex items-start justify-between gap-3">
+              <div className="flex items-start justify-between">
                 <div>
                   <p className="text-xs uppercase tracking-[0.18em] text-zinc-500">
                     {node.id}
@@ -120,17 +125,23 @@ export default function NodesPage() {
 
               <div className="mt-4 space-y-2 text-sm">
                 <p className="flex justify-between text-zinc-300">
-                  <span className="text-zinc-500">Crop Type</span>
+                  <span className="text-zinc-500">
+                    Crop Type
+                  </span>
                   <span>{node.cropType}</span>
                 </p>
 
                 <p className="flex justify-between text-zinc-300">
-                  <span className="text-zinc-500">Battery</span>
+                  <span className="text-zinc-500">
+                    Battery
+                  </span>
                   <span>{node.battery}%</span>
                 </p>
 
                 <p className="flex justify-between text-zinc-300">
-                  <span className="text-zinc-500">Signal Strength</span>
+                  <span className="text-zinc-500">
+                    Signal Strength
+                  </span>
                   <span>{node.signal}%</span>
                 </p>
               </div>
