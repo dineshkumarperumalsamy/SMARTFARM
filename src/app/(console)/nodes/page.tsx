@@ -15,6 +15,12 @@ type NodeCard = {
   signal: number;
 };
 
+type FirestoreNode = Partial<NodeCard> & {
+  id?: string;
+  battery?: number | string;
+  signal?: number | string;
+};
+
 function statusClasses(status: string) {
   if (status === "Online") {
     return "text-emerald-300 border-emerald-400/35 bg-emerald-500/10";
@@ -27,29 +33,51 @@ function statusClasses(status: string) {
   return "text-red-300 border-red-400/35 bg-red-500/10";
 }
 
+function toNumber(value: number | string | undefined) {
+  if (typeof value === "number") return value;
+
+  if (typeof value === "string") {
+    const parsed = Number.parseFloat(value);
+    if (!Number.isNaN(parsed)) return parsed;
+  }
+
+  return 0;
+}
+
 export default function NodesPage() {
   const [nodes, setNodes] = useState<NodeCard[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     async function loadNodes() {
-      const snapshot = await getDocs(collection(db, "nodes"));
+      try {
+        setError(null);
 
-      const nextNodes = snapshot.docs.map((doc) => {
-        const data = doc.data();
+        const snapshot = await getDocs(collection(db, "nodes"));
 
-        return {
-          id: doc.id,
-          name: data.name ?? "Unnamed Node",
-          status: data.status ?? "Offline",
-          cropType: data.cropType ?? "Unknown",
-          battery: data.battery ?? 0,
-          signal: data.signal ?? 0,
-        };
-      });
+        const nextNodes = snapshot.docs.map((docSnapshot) => {
+          const data = docSnapshot.data() as FirestoreNode;
 
-      setNodes(nextNodes);
-      setLoading(false);
+          return {
+            id: data.id ?? docSnapshot.id,
+            name: data.name ?? "Unnamed Node",
+            status: data.status ?? "Offline",
+            cropType: data.cropType ?? "Unknown",
+            battery: toNumber(data.battery),
+            signal: toNumber(data.signal),
+          };
+        });
+
+        setNodes(nextNodes);
+      } catch {
+        setNodes([]);
+        setError(
+          "Unable to load nodes from Firebase Firestore. Check credentials or rules."
+        );
+      } finally {
+        setLoading(false);
+      }
     }
 
     loadNodes();
@@ -59,6 +87,8 @@ export default function NodesPage() {
     <SectionCard title="Node Management" subtitle="Connected farm nodes">
       {loading ? (
         <p className="text-sm text-zinc-400">Loading nodes...</p>
+      ) : error ? (
+        <p className="text-sm text-zinc-400">{error}</p>
       ) : nodes.length === 0 ? (
         <p className="text-sm text-zinc-400">No nodes found.</p>
       ) : (
