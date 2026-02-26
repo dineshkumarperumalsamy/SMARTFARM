@@ -6,6 +6,8 @@ import { doc, onSnapshot } from "firebase/firestore";
 import { SectionCard } from "@/components/section-card";
 import { db } from "@/lib/firebase";
 
+/* ================= TYPES ================= */
+
 type NodeAnalytics = {
   id: string;
   name: string;
@@ -21,53 +23,103 @@ type NodeAnalytics = {
   expectedShelfLife: string;
   optimalTemp: number;
   optimalHumidity: number;
-  spoilageChance: number;
   storageStatus: string;
 };
 
 type RiskLevel = "SAFE" | "WARNING" | "CRITICAL";
 
-function toNumber(value: unknown, fallback = 0) {
-  if (typeof value === "number") return value;
-  if (typeof value === "string") {
-    const parsed = Number.parseFloat(value);
-    if (!Number.isNaN(parsed)) return parsed;
-  }
-  return fallback;
+/* ================= HELPERS ================= */
+
+const toNumber = (v: unknown, f = 0) =>
+  typeof v === "number"
+    ? v
+    : typeof v === "string" && !isNaN(+v)
+    ? +v
+    : f;
+
+const toText = (v: unknown, f = "-") =>
+  typeof v === "string" && v.trim() ? v : f;
+
+const toDate = (v: unknown) =>
+  typeof v === "string" ? new Date(v) : null;
+
+/* ================= SPOILAGE ENGINE ================= */
+
+function calculateSpoilage(node: NodeAnalytics) {
+  const storageDate = toDate(node.storageDate);
+  const now = new Date();
+
+  const daysStored = storageDate
+    ? Math.max(
+        0,
+        Math.floor(
+          (now.getTime() - storageDate.getTime()) /
+            86400000
+        )
+      )
+    : 0;
+
+  const shelfLife = Math.max(
+    1,
+    toNumber(node.expectedShelfLife, 1)
+  );
+
+  let spoilage = (daysStored / shelfLife) * 60;
+
+  if (node.temperature > node.optimalTemp)
+    spoilage += 15;
+
+  if (node.humidity > node.optimalHumidity)
+    spoilage += 10;
+
+  if (node.gasLevel > 150) spoilage += 20;
+
+  return {
+    spoilagePercentage: Math.min(
+      100,
+      Math.max(0, Math.round(spoilage))
+    ),
+    remainingDays: Math.max(
+      0,
+      shelfLife - daysStored
+    ),
+  };
 }
 
-function toText(value: unknown, fallback = "-") {
-  return typeof value === "string" && value.trim()
-    ? value
-    : fallback;
+function spoilageState(p: number) {
+  if (p < 40)
+    return {
+      label: "Fresh",
+      cls: "text-emerald-300 border-emerald-400/35",
+    };
+
+  if (p < 70)
+    return {
+      label: "Warning",
+      cls: "text-amber-300 border-amber-400/35",
+    };
+
+  return {
+    label: "Critical",
+    cls: "text-red-300 border-red-400/35",
+  };
 }
 
-function calculateRisk(node: NodeAnalytics): RiskLevel {
-  if (node.gasLevel > 150) return "CRITICAL";
+/* ================= RISK ================= */
 
-  let score = 0;
-  if (node.temperature > 30) score++;
-  if (node.humidity > 75) score++;
+function calculateRisk(
+  n: NodeAnalytics
+): RiskLevel {
+  if (n.gasLevel > 150) return "CRITICAL";
 
-  if (score === 0) return "SAFE";
-  return "WARNING";
+  let s = 0;
+  if (n.temperature > 30) s++;
+  if (n.humidity > 75) s++;
+
+  return s === 0 ? "SAFE" : "WARNING";
 }
 
-function riskClasses(risk: RiskLevel) {
-  if (risk === "SAFE")
-    return "border-emerald-400/35 bg-emerald-500/10 text-emerald-300";
-
-  if (risk === "WARNING")
-    return "border-amber-400/35 bg-amber-500/10 text-amber-300";
-
-  return "border-red-400/35 bg-red-500/10 text-red-300";
-}
-
-function recommendationForRisk(risk: RiskLevel) {
-  if (risk === "SAFE") return "Safe to Hold";
-  if (risk === "WARNING") return "Sell Soon";
-  return "Sell Immediately";
-}
+/* ================= COMPONENT ================= */
 
 export default function NodeAnalyticsPage({
   params,
@@ -76,124 +128,111 @@ export default function NodeAnalyticsPage({
 }) {
   const [node, setNode] =
     useState<NodeAnalytics | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] =
-    useState<string | null>(null);
 
   useEffect(() => {
-    const unsubscribe = onSnapshot(
+    return onSnapshot(
       doc(db, "nodes", params.nodeId),
-      (snapshot) => {
-        if (!snapshot.exists()) {
-          setNode(null);
-          setLoading(false);
-          return;
-        }
+      (snap) => {
+        if (!snap.exists()) return;
 
-        const data = snapshot.data();
+        const d = snap.data();
 
         setNode({
-          id: snapshot.id,
-          name:
-            typeof data.name === "string"
-              ? data.name
-              : `Node ${snapshot.id}`,
+          id: snap.id,
+          name: toText(d.name),
 
-          temperature: toNumber(data.temperature),
+          temperature: toNumber(d.temperature),
           humidity: toNumber(
-            data.humidity ?? data.moisture
+            d.humidity ?? d.moisture
           ),
-          gasLevel: toNumber(data.gasLevel),
-          battery: toNumber(data.battery),
-          signal: toNumber(data.signal),
+          gasLevel: toNumber(d.gasLevel),
+          battery: toNumber(d.battery),
+          signal: toNumber(d.signal),
 
-          cropType: toText(data.cropType),
-          description: toText(data.description),
-          storageDate: toText(data.storageDate),
+          cropType: toText(d.cropType),
+          description: toText(d.description),
+          storageDate: toText(d.storageDate),
           expectedShelfLife: toText(
-            data.expectedShelfLife
+            d.expectedShelfLife
           ),
-          optimalTemp: toNumber(data.optimalTemp),
+          optimalTemp: toNumber(
+            d.optimalTemp
+          ),
           optimalHumidity: toNumber(
-            data.optimalHumidity
-          ),
-          spoilageChance: toNumber(
-            data.spoilageChance
+            d.optimalHumidity
           ),
           storageStatus: toText(
-            data.storageStatus
+            d.storageStatus
           ),
         });
-
-        setLoading(false);
-      },
-      () => {
-        setError(
-          "Unable to load node analytics."
-        );
-        setLoading(false);
       }
     );
-
-    return () => unsubscribe();
   }, [params.nodeId]);
-
-  const risk = useMemo(
-    () => (node ? calculateRisk(node) : null),
-    [node]
-  );
-
-  const recommendation =
-    risk && recommendationForRisk(risk);
-
-  if (loading)
-    return (
-      <SectionCard title="Loading Node">
-        Loading analytics...
-      </SectionCard>
-    );
-
-  if (error)
-    return (
-      <SectionCard title="Error">
-        {error}
-      </SectionCard>
-    );
 
   if (!node)
     return (
-      <SectionCard title="Node Not Found" />
+      <SectionCard title="Loading..." />
     );
+
+  const spoilage =
+    calculateSpoilage(node);
+
+  const spoil =
+    spoilageState(
+      spoilage.spoilagePercentage
+    );
+
+  const risk =
+    calculateRisk(node);
 
   return (
     <main className="space-y-5">
-      <div className="flex justify-between">
-        <h1 className="text-2xl font-semibold">
-          {node.name}
-        </h1>
+      <h1 className="text-2xl font-semibold">
+        {node.name}
+      </h1>
 
-        <Link href="/nodes">Back</Link>
-      </div>
-
-      {/* STORAGE METADATA */}
-      <SectionCard title="Crop Storage Metadata">
-        <p>Crop: {node.cropType}</p>
-        <p>Stored: {node.storageDate}</p>
-        <p>Status: {node.storageStatus}</p>
+      <SectionCard title="Crop Metadata">
+        <p>{node.cropType}</p>
+        <p>{node.storageDate}</p>
         <p>{node.description}</p>
       </SectionCard>
 
-      {/* SENSOR DATA */}
       <SectionCard title="Live Sensors">
-        <p>Temp: {node.temperature}°C</p>
-        <p>Humidity: {node.humidity}%</p>
-        <p>Gas: {node.gasLevel} ppm</p>
+        <p>
+          Temp: {node.temperature}°C
+        </p>
+        <p>
+          Humidity: {node.humidity}%
+        </p>
+        <p>
+          Gas: {node.gasLevel}
+        </p>
       </SectionCard>
 
-      {/* DECISION */}
-      <SectionCard title="Recommendation">
-        {recommendation}
+      <SectionCard title="Spoilage">
+        <p>
+          {spoilage.spoilagePercentage}%
+        </p>
+        <span className={spoil.cls}>
+          {spoil.label}
+        </span>
+        <p>
+          Remaining Days:
+          {spoilage.remainingDays}
+        </p>
       </SectionCard>
+
+      <SectionCard title="Decision">
+        {risk === "SAFE"
+          ? "Safe to Hold"
+          : risk === "WARNING"
+          ? "Sell Soon"
+          : "Sell Immediately"}
+      </SectionCard>
+
+      <Link href="/nodes">
+        Back
+      </Link>
     </main>
   );
 }
