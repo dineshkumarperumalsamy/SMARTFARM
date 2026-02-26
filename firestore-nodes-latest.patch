@@ -1,0 +1,42 @@
+From e9b4f689ee95b5990fbc6247dcc969b1b06cb8b1 Mon Sep 17 00:00:00 2001
+From: Codex <codex@openai.com>
+Date: Thu, 26 Feb 2026 08:08:27 +0000
+Subject: [PATCH] Load Nodes page cards from Firestore collection
+
+---
+ src/app/(console)/nodes/page.tsx | 10 +++++++---
+ 1 file changed, 7 insertions(+), 3 deletions(-)
+
+diff --git a/src/app/(console)/nodes/page.tsx b/src/app/(console)/nodes/page.tsx
+index d3157e2..4528858 100644
+--- a/src/app/(console)/nodes/page.tsx
++++ b/src/app/(console)/nodes/page.tsx
+@@ -15,6 +15,10 @@ type NodeCard = {
+   signal: number;
+ };
+ 
++type FirestoreNode = Partial<NodeCard> & {
++  id?: string;
++};
++
+ function statusClasses(status: string) {
+   if (status === "Online") {
+     return "text-emerald-300 border-emerald-400/35 bg-emerald-500/10";
+@@ -35,11 +39,11 @@ export default function NodesPage() {
+     async function loadNodes() {
+       try {
+         const snapshot = await getDocs(collection(db, "nodes"));
+-        const nextNodes = snapshot.docs.map((item) => {
+-          const data = item.data() as Partial<NodeCard>;
++        const nextNodes = snapshot.docs.map((docSnapshot) => {
++          const data = docSnapshot.data() as FirestoreNode;
+ 
+           return {
+-            id: data.id ?? item.id,
++            id: data.id ?? docSnapshot.id,
+             name: data.name ?? "Unnamed Node",
+             status: data.status ?? "Offline",
+             cropType: data.cropType ?? "Unknown",
+-- 
+2.43.0
+
