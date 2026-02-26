@@ -21,15 +21,21 @@ type FirestoreNode = Partial<NodeCard> & {
   signal?: number | string;
 };
 
-function statusClasses(status: string) {
-  if (status === "Online")
-    return "text-emerald-300 border-emerald-400/35 bg-emerald-500/10";
+/* ================= STATUS STYLE ================= */
 
-  if (status === "Warning")
+function statusClasses(status: string) {
+  if (status === "Online") {
+    return "text-emerald-300 border-emerald-400/35 bg-emerald-500/10";
+  }
+
+  if (status === "Warning") {
     return "text-amber-300 border-amber-400/35 bg-amber-500/10";
+  }
 
   return "text-red-300 border-red-400/35 bg-red-500/10";
 }
+
+/* ================= HELPERS ================= */
 
 function toNumber(value: number | string | undefined) {
   if (typeof value === "number") return value;
@@ -42,6 +48,8 @@ function toNumber(value: number | string | undefined) {
   return 0;
 }
 
+/* ================= PAGE ================= */
+
 export default function NodesPage() {
   const [nodes, setNodes] = useState<NodeCard[]>([]);
   const [loading, setLoading] = useState(true);
@@ -53,11 +61,11 @@ export default function NodesPage() {
     const unsubscribe = onSnapshot(
       collection(db, "nodes"),
       (snapshot) => {
-        const nextNodes = snapshot.docs.map((docSnapshot) => {
-          const data = docSnapshot.data() as FirestoreNode;
+        const nextNodes = snapshot.docs.map((doc) => {
+          const data = doc.data() as FirestoreNode;
 
           return {
-            id: data.id ?? docSnapshot.id,
+            id: data.id ?? doc.id,
             name: data.name ?? "Unnamed Node",
             status: data.status ?? "Offline",
             cropType: data.cropType ?? "Unknown",
@@ -91,7 +99,9 @@ export default function NodesPage() {
           Loading nodes...
         </p>
       ) : error ? (
-        <p className="text-sm text-zinc-400">{error}</p>
+        <p className="text-sm text-zinc-400">
+          {error}
+        </p>
       ) : nodes.length === 0 ? (
         <p className="text-sm text-zinc-400">
           No nodes found.
@@ -104,11 +114,12 @@ export default function NodesPage() {
               href={`/nodes/${node.id}`}
               className="rounded-2xl border border-white/10 bg-black/35 p-4 transition hover:border-cyan-400/35 hover:bg-cyan-500/[0.08]"
             >
-              <div className="flex items-start justify-between">
+              <div className="flex items-start justify-between gap-3">
                 <div>
                   <p className="text-xs uppercase tracking-[0.18em] text-zinc-500">
                     {node.id}
                   </p>
+
                   <h3 className="mt-2 text-lg font-semibold text-zinc-100">
                     {node.name}
                   </h3>

@@ -3,6 +3,21 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { doc, onSnapshot } from "firebase/firestore";
+import { motion } from "framer-motion";
+import {
+  CartesianGrid,
+  Legend,
+  Line,
+  LineChart,
+  PolarAngleAxis,
+  RadialBar,
+  RadialBarChart,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from "recharts";
+
 import { SectionCard } from "@/components/section-card";
 import { db } from "@/lib/firebase";
 
@@ -16,7 +31,6 @@ type NodeAnalytics = {
   gasLevel: number;
   battery: number;
   signal: number;
-
   cropType: string;
   description: string;
   storageDate: string;
@@ -27,6 +41,13 @@ type NodeAnalytics = {
 };
 
 type RiskLevel = "SAFE" | "WARNING" | "CRITICAL";
+
+type SensorPoint = {
+  index: number;
+  temperature: number;
+  humidity: number;
+  gasLevel: number;
+};
 
 /* ================= HELPERS ================= */
 
@@ -72,40 +93,20 @@ function calculateSpoilage(node: NodeAnalytics) {
   if (node.humidity > node.optimalHumidity)
     spoilage += 10;
 
-  if (node.gasLevel > 150) spoilage += 20;
+  if (node.gasLevel > 150)
+    spoilage += 20;
 
   return {
     spoilagePercentage: Math.min(
       100,
       Math.max(0, Math.round(spoilage))
     ),
-    remainingDays: Math.max(
+    remainingStorageDays: Math.max(
       0,
       shelfLife - daysStored
     ),
   };
 }
-
-function spoilageState(p: number) {
-  if (p < 40)
-    return {
-      label: "Fresh",
-      cls: "text-emerald-300 border-emerald-400/35",
-    };
-
-  if (p < 70)
-    return {
-      label: "Warning",
-      cls: "text-amber-300 border-amber-400/35",
-    };
-
-  return {
-    label: "Critical",
-    cls: "text-red-300 border-red-400/35",
-  };
-}
-
-/* ================= RISK ================= */
 
 function calculateRisk(
   n: NodeAnalytics
@@ -129,6 +130,9 @@ export default function NodeAnalyticsPage({
   const [node, setNode] =
     useState<NodeAnalytics | null>(null);
 
+  const [sensorBuffer, setSensorBuffer] =
+    useState<SensorPoint[]>([]);
+
   useEffect(() => {
     return onSnapshot(
       doc(db, "nodes", params.nodeId),
@@ -137,10 +141,9 @@ export default function NodeAnalyticsPage({
 
         const d = snap.data();
 
-        setNode({
+        const nextNode = {
           id: snap.id,
           name: toText(d.name),
-
           temperature: toNumber(d.temperature),
           humidity: toNumber(
             d.humidity ?? d.moisture
@@ -148,7 +151,6 @@ export default function NodeAnalyticsPage({
           gasLevel: toNumber(d.gasLevel),
           battery: toNumber(d.battery),
           signal: toNumber(d.signal),
-
           cropType: toText(d.cropType),
           description: toText(d.description),
           storageDate: toText(d.storageDate),
@@ -164,7 +166,25 @@ export default function NodeAnalyticsPage({
           storageStatus: toText(
             d.storageStatus
           ),
-        });
+        };
+
+        setNode(nextNode);
+
+        setSensorBuffer((prev) => [
+          ...prev.slice(-19),
+          {
+            index:
+              prev.length > 0
+                ? prev[prev.length - 1].index + 1
+                : 1,
+            temperature:
+              nextNode.temperature,
+            humidity:
+              nextNode.humidity,
+            gasLevel:
+              nextNode.gasLevel,
+          },
+        ]);
       }
     );
   }, [params.nodeId]);
@@ -177,62 +197,107 @@ export default function NodeAnalyticsPage({
   const spoilage =
     calculateSpoilage(node);
 
-  const spoil =
-    spoilageState(
-      spoilage.spoilagePercentage
-    );
-
   const risk =
     calculateRisk(node);
 
+  const gaugeData = [
+    {
+      value:
+        spoilage.spoilagePercentage,
+    },
+  ];
+
   return (
-    <main className="space-y-5">
-      <h1 className="text-2xl font-semibold">
-        {node.name}
-      </h1>
+    <main className="space-y-6">
 
-      <SectionCard title="Crop Metadata">
-        <p>{node.cropType}</p>
-        <p>{node.storageDate}</p>
-        <p>{node.description}</p>
-      </SectionCard>
+      {/* HEADER */}
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        className="flex justify-between"
+      >
+        <h1 className="text-3xl font-semibold">
+          {node.name}
+        </h1>
 
-      <SectionCard title="Live Sensors">
-        <p>
-          Temp: {node.temperature}°C
-        </p>
-        <p>
-          Humidity: {node.humidity}%
-        </p>
-        <p>
-          Gas: {node.gasLevel}
-        </p>
-      </SectionCard>
+        <Link href="/nodes">
+          Back
+        </Link>
+      </motion.div>
 
-      <SectionCard title="Spoilage">
-        <p>
-          {spoilage.spoilagePercentage}%
-        </p>
-        <span className={spoil.cls}>
-          {spoil.label}
-        </span>
-        <p>
-          Remaining Days:
-          {spoilage.remainingDays}
-        </p>
-      </SectionCard>
+      {/* GRAPH + GAUGE */}
+      <section className="grid lg:grid-cols-2 gap-5">
 
-      <SectionCard title="Decision">
-        {risk === "SAFE"
-          ? "Safe to Hold"
-          : risk === "WARNING"
-          ? "Sell Soon"
-          : "Sell Immediately"}
-      </SectionCard>
+        {/* LIVE GRAPH */}
+        <SectionCard title="Live Sensors">
+          <div className="h-80">
+            <ResponsiveContainer>
+              <LineChart
+                data={sensorBuffer}
+              >
+                <CartesianGrid
+                  strokeDasharray="3 3"
+                />
+                <XAxis dataKey="index" />
+                <YAxis />
+                <Tooltip />
+                <Legend />
 
-      <Link href="/nodes">
-        Back
-      </Link>
+                <Line
+                  dataKey="temperature"
+                  stroke="#22d3ee"
+                />
+                <Line
+                  dataKey="humidity"
+                  stroke="#34d399"
+                />
+                <Line
+                  dataKey="gasLevel"
+                  stroke="#f97316"
+                />
+              </LineChart>
+            </ResponsiveContainer>
+          </div>
+        </SectionCard>
+
+        {/* SPOILAGE GAUGE */}
+        <SectionCard title="Spoilage Meter">
+          <div className="h-72">
+            <ResponsiveContainer>
+              <RadialBarChart
+                data={gaugeData}
+                innerRadius="60%"
+                outerRadius="95%"
+                startAngle={210}
+                endAngle={-30}
+              >
+                <PolarAngleAxis
+                  type="number"
+                  domain={[0, 100]}
+                  tick={false}
+                />
+
+                <RadialBar
+                  dataKey="value"
+                  cornerRadius={10}
+                />
+
+                <text
+                  x="50%"
+                  y="50%"
+                  textAnchor="middle"
+                  className="fill-white text-4xl"
+                >
+                  {
+                    spoilage.spoilagePercentage
+                  }
+                  %
+                </text>
+              </RadialBarChart>
+            </ResponsiveContainer>
+          </div>
+        </SectionCard>
+      </section>
     </main>
   );
 }
